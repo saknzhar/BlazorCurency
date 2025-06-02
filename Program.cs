@@ -16,6 +16,9 @@ builder.Services.AddSingleton<WeatherForecastService>();
 builder.Services.AddRadzenComponents();
 builder.Services.AddSingleton<ICurrencyService, CurrencyService>(); 
 
+builder.Services.AddHttpClient<ICurrencyApiClient, ExchangeRateApiClient>();
+
+builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
