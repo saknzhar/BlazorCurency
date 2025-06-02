@@ -13,22 +13,7 @@ namespace MoneyRate.Services
     public class ExchangeRateApiClient : ICurrencyApiClient
     {
         private readonly HttpClient _httpClient;
-        private readonly CurrencyApiSettings _apiSettings; // Теперь храним объект настроек
-
-        // Фиксированный список валют, которые вы хотите использовать
-        private readonly Dictionary<string, string> _supportedCurrencies = new Dictionary<string, string>
-        {
-            { "USD", "US Dollar" },
-            { "EUR", "Euro" },
-            { "JPY", "Japanese Yen" },
-            { "GBP", "British Pound" },
-            { "AUD", "Australian Dollar" },
-            { "CAD", "Canadian Dollar" },
-            { "CHF", "Swiss Franc" },
-            { "CNY", "Chinese Yuan" },
-            { "HKD", "Hong Kong Dollar" },
-            { "KZT", "Kazakhstan Tenge" }
-        };
+        private readonly CurrencyApiSettings _apiSettings;
 
         public ExchangeRateApiClient(HttpClient httpClient, IOptions<CurrencyApiSettings> apiSettingsOptions)
         {
@@ -77,9 +62,8 @@ namespace MoneyRate.Services
 
         public async Task<Dictionary<string, decimal>> GetAllRatesAsync(string baseCurrency = "USD", CancellationToken cancellationToken = default)
         {
-            var response = await GetApiResponse<ExchangeRatesResponse>($"latest/{baseCurrency}", cancellationToken);
+            var response = await GetApiResponse<ExchangeRatesResponse>($"{_apiSettings.BaseUrl}{_apiSettings.ApiKey}/latest/{baseCurrency}", cancellationToken);
             return response.ConversionRates
-                .Where(kvp => _supportedCurrencies.ContainsKey(kvp.Key))
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         }
 
@@ -103,7 +87,7 @@ namespace MoneyRate.Services
 
         public async Task<decimal?> GetSingleRateAsync(string currencyCode, string baseCurrency = "USD", CancellationToken cancellationToken = default)
         {
-            var response = await GetApiResponse<ExchangeRatesResponse>($"latest/{baseCurrency}", cancellationToken);
+            var response = await GetApiResponse<ExchangeRatesResponse>($"{_apiSettings.BaseUrl}{_apiSettings.ApiKey}/latest/{baseCurrency}", cancellationToken);
             if (response.ConversionRates.TryGetValue(currencyCode.ToUpper(), out decimal rate))
             {
                 return rate;
@@ -118,7 +102,7 @@ namespace MoneyRate.Services
             CancellationToken cancellationToken = default)
         {
             var dateString = date.ToString("yyyy/MM/dd");
-            var response = await GetApiResponse<ExchangeRatesResponse>($"history/{baseCurrency}/{dateString}", cancellationToken);
+            var response = await GetApiResponse<ExchangeRatesResponse>($"{_apiSettings.BaseUrl}{_apiSettings.ApiKey}/history/{baseCurrency}/{dateString}", cancellationToken);
 
             if (response.ConversionRates.TryGetValue(currencyCode.ToUpper(), out decimal rate))
             {
@@ -127,16 +111,11 @@ namespace MoneyRate.Services
             return null;
         }
 
-        public Task<Dictionary<string, string>> GetSupportedCurrenciesAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(_supportedCurrencies);
-        }
-
         public async Task<bool> IsApiAvailableAsync(CancellationToken cancellationToken = default)
         {
             try
             {
-                await GetApiResponse<SupportedCodesResponse>("codes", cancellationToken);
+                await GetApiResponse<SupportedCodesResponse>($"{_apiSettings.BaseUrl}{_apiSettings.ApiKey}/codes", cancellationToken);
                 return true;
             }
             catch (Exception ex)
@@ -159,34 +138,37 @@ namespace MoneyRate.Services
 
             try
             {
-                var latestRatesResponse = await GetApiResponse<ExchangeRatesResponse>($"latest/{baseCurrency}", cancellationToken);
+                var latestRatesResponse = await GetApiResponse<ExchangeRatesResponse>($"{_apiSettings.BaseUrl}{_apiSettings.ApiKey}/latest/{baseCurrency}", cancellationToken);
 
-                var supportedCurrencies = _supportedCurrencies;
+                var supportedCodesResponse = await GetSupportedCodes();
 
                 response.Result = latestRatesResponse.Result;
                 response.ErrorType = latestRatesResponse.ErrorType;
-                response.TimeLastUpdateUnix = latestRatesResponse.TimeLastUpdateUnix;
-                response.TimeLastUpdateUtc = latestRatesResponse.TimeLastUpdateUtc;
-                response.TimeNextUpdateUnix = latestRatesResponse.TimeNextUpdateUnix;
-                response.TimeNextUpdateUtc = latestRatesResponse.TimeNextUpdateUtc;
+                response.TimeLastUpdateUtc = DateTime.Now.ToString();
                 response.ConversionRates = latestRatesResponse.ConversionRates;
 
-                var codesToInclude = currencyCodes ?? _supportedCurrencies.Keys;
-
-                foreach (var code in codesToInclude)
-                {
-                    if (latestRatesResponse.ConversionRates.TryGetValue(code, out decimal rate))
-                    {
-                        var name = supportedCurrencies.TryGetValue(code, out var currencyName) ? currencyName : code;
-                        response.DetailedRates.Add(code, new CurrencyRateDetail { Code = code, Name = name, Rate = rate });
-                    }
-                }
+                response.MergeWithSupportedCodes(supportedCodesResponse);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error in GetDetailedRatesAsync: {ex.Message}");
                 response.Result = "error";
                 response.ErrorType = "client-side-error";
+            }
+
+            return response;
+        }
+
+        public async Task<SupportedCodesResponse> GetSupportedCodes(CancellationToken cancellationToken = default)
+        {
+            var response = new SupportedCodesResponse();
+            try
+            {
+                response = await GetApiResponse<SupportedCodesResponse>($"{_apiSettings.BaseUrl}{_apiSettings.ApiKey}/codes", cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"API availability check failed: {ex.Message}");
             }
 
             return response;

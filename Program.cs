@@ -19,6 +19,12 @@ builder.Services.AddSingleton<ICurrencyService, CurrencyService>();
 builder.Services.AddHttpClient<ICurrencyApiClient, ExchangeRateApiClient>();
 
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+
+builder.Services.AddScoped<IExcelExportService, ExcelExportService>();
+
+builder.Services.Configure<CurrencyApiSettings>(
+    builder.Configuration.GetSection("CurrencyApi"));
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

@@ -1,71 +1,100 @@
 @page "/currencyrates"
 @inject ICurrencyService _currencyService 
+@inject IExcelExportService _excelService
+@inject IJSRuntime JSRuntime
 <h3>Курсы валют</h3>
 
-<RadzenButton Text="Обновить курсы" Click="@LoadCurrencyRates" Icon="refresh" />
-<RadzenButton Text="Добавить новый" Click="@(() => AddNewCurrency())" Icon="add_circle" ButtonStyle="ButtonStyle.Success" Class="ms-3" />
+<div style="display: flex; justify-content: flex-end; width: 100%;">
+    <RadzenButton Icon="file_download" Text="Экспорт в Excel" Click="@ExportAllCurrencyRatesToExcel" />
+</div>
 
-<RadzenDataGrid Data="@currencyRates" TItem="CurrencyRate" AllowPaging="true" PageSize="5" AllowSorting="true" AllowFiltering="true">
+<RadzenDataGrid Data="@currencyRates.CurrencyRatesList" TItem="CurrencyRateDetail" AllowPaging="true" PageSize="20" AllowSorting="true" AllowFiltering="true">
     <Columns>
-        <RadzenDataGridColumn TItem="CurrencyRate" Property="Id" Title="ID" Width="80px" TextAlign="TextAlign.Center" />
-        <RadzenDataGridColumn TItem="CurrencyRate" Property="CurrencyCode" Title="Код валюты" Width="120px" />
-        <RadzenDataGridColumn TItem="CurrencyRate" Property="CurrencyName" Title="Название валюты" />
-        <RadzenDataGridColumn TItem="CurrencyRate" Property="Rate" Title="Курс" FormatString="{0:N4}" Width="150px" TextAlign="TextAlign.Right" />
-        <RadzenDataGridColumn TItem="CurrencyRate" Property="Date" Title="Дата" FormatString="{0:d}" Width="150px" TextAlign="TextAlign.Center" />
-        <RadzenDataGridColumn TItem="CurrencyRate">
-            <Template Context="currencyRate">
-                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Info" Size="ButtonSize.Small" Click="@(() => EditCurrency(currencyRate))" />
-                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Class="ms-2" Click="@(() => DeleteCurrency(currencyRate))" />
-            </Template>
-        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="Id" Title="ID" Width="80px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="CurrencyCode" Title="Код валюты" Width="120px" />
+        <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="CurrencyName" Title="Название валюты" />
+        <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="Rate" Title="Курс" FormatString="{0:N4}" Width="150px" TextAlign="TextAlign.Right" />
+        <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="Date" Title="Дата" FormatString="{0:d}" Width="150px" TextAlign="TextAlign.Center" />
     </Columns>
 </RadzenDataGrid>
+<div class="mb-3">
+    <RadzenButton Text="@(_isLoading ? "Loading..." : "Refresh Now")"
+                  Icon="refresh"
+                  Disabled="@_isLoading"
+                  Click="@RefreshManually"
+                  ButtonStyle="ButtonStyle.Primary" />
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+    }
+
+    @if (currencyRates.TimeLastUpdateUtc != string.Empty)
+    {
+        <span class="ms-3 text-muted">Last updated: @currencyRates.TimeLastUpdateUtc</span>
+    }
+</div>
 
 @code {
-    private List<CurrencyRate> currencyRates = new List<CurrencyRate>();
+    private CurrencyRatesResponse currencyRates = new CurrencyRatesResponse();
+    private Timer? _timer;
+    private bool _isLoading = false;
 
-    // Вместо OnInitialized используем OnInitializedAsync для асинхронных операций
     protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrencyRates();
+        StartTimer();
+    }
+    private void StartTimer()
+    {
+        _timer = new Timer(async _ => await TimerCallback(), null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
+    }
+    private async Task TimerCallback()
+    {
+        if (!_isLoading)
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadCurrencyRates();
+                StateHasChanged(); // Refresh the UI
+            });
+        }
+    }
+    private async Task LoadCurrencyRates()
+    {
+        try
+        {
+            _isLoading = true;
+            currencyRates = await _currencyService.GetCurrencyRatesAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle error - you might want to show a notification
+            Console.WriteLine($"Error loading currency rates: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+    private async Task RefreshManually()
     {
         await LoadCurrencyRates();
     }
 
-    private async Task LoadCurrencyRates()
+    private async Task ExportAllCurrencyRatesToExcel()
     {
-        currencyRates = await _currencyService.GetCurrencyRatesAsync();
-        // StateHasChanged(); // Обычно не требуется после await, но может быть полезно для отладки или сложных сценариев
-    }
-
-    private async Task AddNewCurrency()
-    {
-        // Пример добавления нового курса (для демонстрации)
-        // В реальном приложении, возможно, будет использоваться модальное окно для ввода данных
-        var newRate = new CurrencyRate
+        if (currencyRates?.CurrencyRatesList != null)
         {
-            CurrencyCode = "AUD",
-            CurrencyName = "Австралийский доллар",
-            Rate = 60.00m,
-            Date = DateTime.Now
-        };
-        await _currencyService.AddCurrencyRateAsync(newRate);
-        await LoadCurrencyRates(); // Перезагружаем данные для обновления грида
-    }
+            // 1. Generate the Excel file as a byte array using your service
+            var excelBytes = await _excelService.ExportCurrencyRatesToExcelAsync(
+                currencyRates.CurrencyRatesList,
+                "AllCurrencyRates.xlsx" 
+            );
 
-    private async Task EditCurrency(CurrencyRate currencyRate)
-    {
-        // Пример редактирования (для демонстрации)
-        // В реальном приложении, возможно, будет использоваться модальное окно для редактирования
-        currencyRate.Rate += 0.01m; // Просто изменяем курс для примера
-        await _currencyService.UpdateCurrencyRateAsync(currencyRate);
-        await LoadCurrencyRates(); // Перезагружаем данные для обновления грида
-        Console.WriteLine($"Отредактирован курс: {currencyRate.CurrencyName}, новый курс: {currencyRate.Rate}");
-    }
+            string base64String = Convert.ToBase64String(excelBytes);
 
-    private async Task DeleteCurrency(CurrencyRate currencyRate)
-    {
-        // В реальном приложении здесь может быть запрос подтверждения
-        await _currencyService.DeleteCurrencyRateAsync(currencyRate.Id);
-        await LoadCurrencyRates(); // Перезагружаем данные для обновления грида
-        Console.WriteLine($"Удален курс: {currencyRate.CurrencyName}");
+            await JSRuntime.InvokeVoidAsync("saveAsFile", "AllCurrencyRates.xlsx", base64String);
+        }
     }
 }

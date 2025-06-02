@@ -1,10 +1,11 @@
 using MoneyRate.Data;
+using MoneyRate.Interfaces.Dtos;
 
 namespace MoneyRate.Interfaces
 {
     public interface ICurrencyService
     {
-        Task<List<CurrencyRate>> GetCurrencyRatesAsync();
+        Task<CurrencyRatesResponse> GetCurrencyRatesAsync();
         Task<CurrencyRate?> GetCurrencyRateByIdAsync(int id);
         Task AddCurrencyRateAsync(CurrencyRate rate);
         Task UpdateCurrencyRateAsync(CurrencyRate rate);
