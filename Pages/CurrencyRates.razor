@@ -4,10 +4,27 @@
 @inject IJSRuntime JSRuntime
 <h3>Курсы валют</h3>
 
-<div style="display: flex; justify-content: flex-end; width: 100%;">
-    <RadzenButton Icon="file_download" Text="Экспорт в Excel" Click="@ExportAllCurrencyRatesToExcel" />
-</div>
+<div style="display: flex; justify-content: space-between; width: 100%;">
+    <div class="mb-3">
+        <RadzenButton Text="@(_isLoading ? "Loading..." : "Refresh Now")"
+                      Icon="refresh"
+                      Disabled="@_isLoading"
+                      Click="@RefreshManually"
+                      ButtonStyle="ButtonStyle.Primary" />
 
+        @if (_isLoading)
+        {
+            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+        }
+
+        @if (currencyRates.TimeLastUpdateUtc != string.Empty)
+        {
+            <span class="ms-3 text-muted">Last updated: @currencyRates.TimeLastUpdateUtc</span>
+        }
+    </div>
+    <RadzenButton Icon="file_download" Text="Экспорт в Excel" Click="@ExportAllCurrencyRatesToExcel" />
+
+</div>
 <RadzenDataGrid Data="@currencyRates.CurrencyRatesList" TItem="CurrencyRateDetail" AllowPaging="true" PageSize="20" AllowSorting="true" AllowFiltering="true">
     <Columns>
         <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="Id" Title="ID" Width="80px" TextAlign="TextAlign.Center" />
@@ -17,23 +34,7 @@
         <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="Date" Title="Дата" FormatString="{0:d}" Width="150px" TextAlign="TextAlign.Center" />
     </Columns>
 </RadzenDataGrid>
-<div class="mb-3">
-    <RadzenButton Text="@(_isLoading ? "Loading..." : "Refresh Now")"
-                  Icon="refresh"
-                  Disabled="@_isLoading"
-                  Click="@RefreshManually"
-                  ButtonStyle="ButtonStyle.Primary" />
 
-    @if (_isLoading)
-    {
-        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
-    }
-
-    @if (currencyRates.TimeLastUpdateUtc != string.Empty)
-    {
-        <span class="ms-3 text-muted">Last updated: @currencyRates.TimeLastUpdateUtc</span>
-    }
-</div>
 
 @code {
     private CurrencyRatesResponse currencyRates = new CurrencyRatesResponse();
