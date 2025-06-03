@@ -4,8 +4,8 @@
 @inject IJSRuntime JSRuntime
 <h3>Курсы валют</h3>
 
-<div style="display: flex; justify-content: space-between; width: 100%;">
-    <div class="mb-3">
+<div>
+    <RadzenButton Icon="file_download" Text="Экспорт в Excel" Click="@ExportAllCurrencyRatesToExcel" />
         <RadzenButton Text="@(_isLoading ? "Loading..." : "Refresh Now")"
                       Icon="refresh"
                       Disabled="@_isLoading"
@@ -21,8 +21,7 @@
         {
             <span class="ms-3 text-muted">Last updated: @currencyRates.TimeLastUpdateUtc</span>
         }
-    </div>
-    <RadzenButton Icon="file_download" Text="Экспорт в Excel" Click="@ExportAllCurrencyRatesToExcel" />
+    
 
 </div>
 <RadzenDataGrid Data="@currencyRates.CurrencyRatesList" TItem="CurrencyRateDetail" AllowPaging="true" PageSize="20" AllowSorting="true" AllowFiltering="true">
