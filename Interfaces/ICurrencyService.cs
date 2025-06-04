@@ -6,9 +6,7 @@ namespace MoneyRate.Interfaces
     public interface ICurrencyService
     {
         Task<CurrencyRatesResponse> GetCurrencyRatesAsync();
-        Task<CurrencyRate?> GetCurrencyRateByIdAsync(int id);
-        Task AddCurrencyRateAsync(CurrencyRate rate);
-        Task UpdateCurrencyRateAsync(CurrencyRate rate);
-        Task DeleteCurrencyRateAsync(int id);
+
+        Task<CurrencyRateDetail> GetCurrencyRateAsync(string currencyCode);
     }
 }

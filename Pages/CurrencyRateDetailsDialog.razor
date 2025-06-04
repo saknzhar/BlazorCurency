@@ -1,0 +1,16 @@
+﻿@page "/currencycode/{OrderID}"
+
+<RadzenCard >
+    <h4>Детали курса валют</h4>
+    @if (CurrencyRate != null)
+    {
+        <p><b>Код валюты:</b> @CurrencyRate.CurrencyCode</p>
+        <p><b>Название:</b> @CurrencyRate.CurrencyName</p>
+        <p><b>Курс:</b> @CurrencyRate.Rate</p>
+        <p><b>Дата:</b> @CurrencyRate.Date.ToShortDateString()</p>
+    }
+</RadzenCard>
+
+@code {
+    [Parameter] public CurrencyRateDetail? CurrencyRate { get; set; }
+}

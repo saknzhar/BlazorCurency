@@ -25,5 +25,7 @@ namespace MoneyRate.Interfaces
             string baseCurrency = "USD",
             CancellationToken cancellationToken = default);
         Task<SupportedCodesResponse> GetSupportedCodes(CancellationToken cancellationToken = default);
+
+
     }
 }

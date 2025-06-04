@@ -1,30 +1,48 @@
 @page "/currencyrates"
-@inject ICurrencyService _currencyService 
-@inject IExcelExportService _excelService
+@inject ICurrencyService currencyService
+@inject IExcelExportService excelService
 @inject IJSRuntime JSRuntime
+@inject Radzen.DialogService DialogService
+
 <h3>Курсы валют</h3>
 
-<div>
+<div class="mb-3">
     <RadzenButton Icon="file_download" Text="Экспорт в Excel" Click="@ExportAllCurrencyRatesToExcel" />
-        <RadzenButton Text="@(_isLoading ? "Loading..." : "Refresh Now")"
-                      Icon="refresh"
-                      Disabled="@_isLoading"
-                      Click="@RefreshManually"
-                      ButtonStyle="ButtonStyle.Primary" />
+    <RadzenButton Text="@(_isLoading ? "Loading..." : "Refresh Now")"
+                  Icon="refresh"
+                  Disabled="@_isLoading"
+                  Click="@RefreshManually"
+                  ButtonStyle="ButtonStyle.Primary"
+                  Class="ms-2" />
 
-        @if (_isLoading)
-        {
-            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
-        }
+    @if (_isLoading)
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" Class="ms-2" />
+    }
 
-        @if (currencyRates.TimeLastUpdateUtc != string.Empty)
-        {
-            <span class="ms-3 text-muted">Last updated: @currencyRates.TimeLastUpdateUtc</span>
-        }
-    
+    @if (!string.IsNullOrEmpty(currencyRates.TimeLastUpdateUtc))
+    {
+        <span class="ms-3 text-muted">Last updated: @currencyRates.TimeLastUpdateUtc</span>
+    }
 
+    <RadzenButton Text="Просмотр информации"
+                  Click="@ShowCurrencyDetails"
+                  Icon="info"
+                  ButtonStyle="ButtonStyle.Info"
+                  Class="ms-3"
+                  Disabled="@(_isLoading || selectedCurrencyRate == null)" />
 </div>
-<RadzenDataGrid Data="@currencyRates.CurrencyRatesList" TItem="CurrencyRateDetail" AllowPaging="true" PageSize="20" AllowSorting="true" AllowFiltering="true">
+
+<RadzenDataGrid @ref="dataGrid"
+                Data="@currencyRates.CurrencyRatesList"
+                TItem="CurrencyRateDetail"
+                AllowPaging="true"
+                PageSize="20"
+                AllowRowSelectOnRowClick="true"
+                SelectionMode="DataGridSelectionMode.Single"
+                @bind-Value="@selectedItems"
+                RowSelect="@OnRowSelect"
+                RowRender="@OnRowRender">
     <Columns>
         <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="Id" Title="ID" Width="80px" TextAlign="TextAlign.Center" />
         <RadzenDataGridColumn TItem="CurrencyRateDetail" Property="CurrencyCode" Title="Код валюты" Width="120px" />
@@ -34,21 +52,44 @@
     </Columns>
 </RadzenDataGrid>
 
-
 @code {
     private CurrencyRatesResponse currencyRates = new CurrencyRatesResponse();
-    private Timer? _timer;
+    private Timer? timer;
     private bool _isLoading = false;
+    private CurrencyRateDetail? selectedCurrencyRate;
+    private IList<CurrencyRateDetail> selectedItems = new List<CurrencyRateDetail>();
+    private RadzenDataGrid<CurrencyRateDetail>? dataGrid;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadCurrencyRates();
         StartTimer();
     }
+
     private void StartTimer()
     {
-        _timer = new Timer(async _ => await TimerCallback(), null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
+        timer = new Timer(async _ => await TimerCallback(), null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
     }
+
+    private void OnRowRender(RowRenderEventArgs<CurrencyRateDetail> args)
+    {
+        if (selectedCurrencyRate != null && args.Data.Id == selectedCurrencyRate.Id)
+        {
+
+            args.Attributes["class"] = "rz-state-highlight rz-data-row ";
+        }
+        else
+        {
+            args.Attributes["class"] = "rz-data-row ";
+        }
+    }
+
+    private void OnRowSelect(CurrencyRateDetail item)
+    {
+        selectedCurrencyRate = item; 
+        StateHasChanged();
+    }
+
     private async Task TimerCallback()
     {
         if (!_isLoading)
@@ -56,16 +97,17 @@
             await InvokeAsync(async () =>
             {
                 await LoadCurrencyRates();
-                StateHasChanged(); // Refresh the UI
+                StateHasChanged();
             });
         }
     }
+
     private async Task LoadCurrencyRates()
     {
         try
         {
             _isLoading = true;
-            currencyRates = await _currencyService.GetCurrencyRatesAsync();
+            currencyRates = await currencyService.GetCurrencyRatesAsync();
         }
         catch (Exception ex)
         {
@@ -77,6 +119,7 @@
             _isLoading = false;
         }
     }
+
     private async Task RefreshManually()
     {
         await LoadCurrencyRates();
@@ -86,15 +129,50 @@
     {
         if (currencyRates?.CurrencyRatesList != null)
         {
-            // 1. Generate the Excel file as a byte array using your service
-            var excelBytes = await _excelService.ExportCurrencyRatesToExcelAsync(
-                currencyRates.CurrencyRatesList,
-                "AllCurrencyRates.xlsx" 
-            );
-
-            string base64String = Convert.ToBase64String(excelBytes);
-
-            await JSRuntime.InvokeVoidAsync("saveAsFile", "AllCurrencyRates.xlsx", base64String);
+            try
+            {
+                var excelBytes = await excelService.ExportCurrencyRatesToExcelAsync(
+                    currencyRates.CurrencyRatesList,
+                    "AllCurrencyRates.xlsx"
+                );
+                string base64String = Convert.ToBase64String(excelBytes);
+                await JSRuntime.InvokeVoidAsync("saveAsFile", "AllCurrencyRates.xlsx", base64String);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error exporting to Excel: {ex.Message}");
+                // Consider showing a user-friendly error message
+            }
         }
+    }
+
+    private async Task ShowCurrencyDetails()
+    {
+        if (selectedCurrencyRate == null)
+        {
+            // Optional: Show a notification that no row is selected
+            return;
+        }
+
+        var parameters = new Dictionary<string, object>()
+        {
+            { "CurrencyRate", selectedCurrencyRate }
+        };
+
+        await DialogService.OpenAsync<CurrencyRateDetailsDialog>(
+            "Детали валюты",
+            parameters,
+            new DialogOptions()
+                {
+                    Width = "450px",
+                    Height = "300px",
+                    Resizable = true,
+                    Draggable = true
+                });
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
     }
 }
